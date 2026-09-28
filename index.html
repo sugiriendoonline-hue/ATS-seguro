@@ -332,34 +332,12 @@ html[data-theme] .start-task-btn{background:linear-gradient(180deg,#ffffff,#e8ee
     <div class="card">
       <h2>Ingresar</h2>
       <label>Código de empresa<input id="loginCompanyCode" autocomplete="organization" placeholder="Ej.: DRG" /></label>
-      <label>Usuario / legajo / nombre<input id="loginCode" autocomplete="username" placeholder="Ej.: admin, 256 o Delfor..." /></label>
+      <label>Usuario / legajo<input id="loginCode" autocomplete="username" placeholder="Ej.: JPEREZ" /></label>
       <label>PIN<input id="loginPin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="••••" /></label>
-      <p class="note" style="margin-top:-4px">Usá el <strong>código de empresa</strong> y tu <strong>usuario, legajo o nombre completo</strong>. No pongas “admin” en Código de empresa salvo que ese sea realmente el código de la empresa.</p>
       <button id="loginBtn" class="primary full">Ingresar</button>
-      <button id="accessHelpBtn" class="secondary full" type="button" style="margin-top:10px">Ayuda para ingresar</button>
       <button id="demoBtn" class="secondary full" type="button" style="margin-top:10px">Entrar en demo</button>
       <button id="setupCompanyBtn" class="ghost full" type="button" style="margin-top:10px">Crear empresa piloto</button>
       <p id="loginHelp" class="note">Piloto local: podés crear una empresa real y usuarios en este dispositivo. Demo: empresa <strong>DEMO</strong>, usuarios <strong>juan</strong>, <strong>hs</strong> o <strong>admin</strong>, PIN <strong>1234</strong>.</p>
-    </div>
-  </section>
-
-  <section id="accessHelpView" class="view">
-    <div class="card">
-      <p class="eyebrow">Ayuda de acceso</p>
-      <h2>Empresas y usuarios guardados</h2>
-      <p class="muted">Estos datos están guardados solamente en este dispositivo. Por seguridad, el PIN actual no se muestra.</p>
-      <div id="accessDirectory"></div>
-      <button class="secondary full" data-go="loginView" style="margin-top:12px">Volver al ingreso</button>
-    </div>
-
-    <div class="card">
-      <p class="eyebrow">Piloto local</p>
-      <h3>Restablecer PIN de administrador</h3>
-      <p class="muted">Usá esta opción solo si olvidaste el PIN del administrador. En la futura versión en nube este proceso tendrá validación adicional.</p>
-      <label>Empresa<select id="resetCompanySelect"></select></label>
-      <label>Administrador<select id="resetAdminSelect"></select></label>
-      <label>Nuevo PIN<input id="resetAdminPin" type="password" inputmode="numeric" placeholder="4 a 8 dígitos" /></label>
-      <button id="resetAdminPinBtn" class="primary full" type="button">Guardar nuevo PIN</button>
     </div>
   </section>
 
@@ -584,7 +562,7 @@ function updateBackendBadge(){const b=$('#backendBadge');b.textContent=cloudAvai
 
 const backend={
  async login(companyCode,loginCode,pin){if(cloudAvailable){const j=await api('/api/login',{method:'POST',body:JSON.stringify({companyCode,loginCode,pin})});lsSet(TOKEN_KEY,j.token);return {user:j.user,company:j.company,cloud:true}}
- const d=localDB(),co=d.companies.find(x=>x.code.toLowerCase()===companyCode.toLowerCase());if(!co)throw new Error('Empresa no encontrada');const needle=loginCode.toLowerCase();const u=d.users.find(x=>x.companyId===co.id&&((x.loginCode||'').toLowerCase()===needle||(x.legajo||'').toLowerCase()===needle||(x.name||'').toLowerCase()===needle)&&x.pin===pin);if(!u)throw new Error('Credenciales inválidas');return {user:u,company:co,cloud:false}},
+ const d=localDB(),co=d.companies.find(x=>x.code.toLowerCase()===companyCode.toLowerCase());if(!co)throw new Error('Empresa no encontrada');const needle=loginCode.toLowerCase();const u=d.users.find(x=>x.companyId===co.id&&((x.loginCode||'').toLowerCase()===needle||(x.legajo||'').toLowerCase()===needle)&&x.pin===pin);if(!u)throw new Error('Credenciales inválidas');return {user:u,company:co,cloud:false}},
  async logout(){if(state.session?.cloud){try{await api('/api/logout',{method:'POST'})}catch{}lsRemove(TOKEN_KEY)}},
  async records(){if(state.session?.cloud){return (await api('/api/records')).records}const d=localDB(),u=state.session.user,co=state.session.company;return d.records.filter(r=>r.companyId===co.id&&(u.role==='worker'?r.workerId===u.id:true))},
  async recordById(id){if(state.session?.cloud){const all=await backend.records();const found=all.find(r=>r.dbId===id||r.id===id);if(!found)throw new Error('ATS no encontrado');return (await api(`/api/records/${found.dbId}`)).record}return localDB().records.find(r=>r.id===id)},
@@ -592,73 +570,13 @@ const backend={
  async review(id,status,comment){if(state.session?.cloud){const all=await backend.records();const found=all.find(r=>r.dbId===id||r.id===id);if(!found)throw new Error('ATS no encontrado');await api(`/api/records/${found.dbId}/review`,{method:'POST',body:JSON.stringify({status,comment})});return}const d=localDB(),r=d.records.find(x=>x.id===id),u=state.session.user;if(!r)throw new Error('ATS no encontrado');r.status=status;r.hsComment=comment;r.updatedAt=new Date().toISOString();r.history.push({at:r.updatedAt,by:u.name,event:`Estado cambiado a ${status}${comment?': '+comment:''}`});saveLocal(d)},
  async users(){if(state.session?.cloud)return (await api('/api/users')).users;const d=localDB(),co=state.session.company;return d.users.filter(u=>u.companyId===co.id)},
  async addUser(data){if(state.session?.cloud)return (await api('/api/users',{method:'POST',body:JSON.stringify(data)})).user;const d=localDB();if(d.users.some(x=>x.loginCode.toLowerCase()===data.loginCode.toLowerCase()))throw new Error('Ese código de acceso ya existe');const co=state.session.company;const u={id:'u'+Date.now(),companyId:co.id,role:data.role||'worker',name:data.name,job:data.job,legajo:data.legajo||'',site:data.site||'',loginCode:data.loginCode||data.legajo||'',pin:data.pin};d.users.push(u);saveLocal(d);return u},
- async createCompany(data){const d=localDB(),code=data.code.trim().toUpperCase();if(!code)throw new Error('Código de empresa obligatorio');if(d.companies.some(c=>c.code.toUpperCase()===code))throw new Error('Ese código de empresa ya existe');const cid='c'+Date.now();const company={id:cid,code,name:data.name.trim()};const admin={id:'u'+Date.now(),companyId:cid,role:'admin',name:data.adminName.trim(),job:'Administrador',legajo:data.adminLogin.trim(),site:'General',loginCode:data.adminLogin.trim(),pin:data.pin};d.companies.push(company);d.users.push(admin);saveLocal(d);return {user:admin,company,cloud:false}},
- async accessDirectory(){if(cloudAvailable)throw new Error('La ayuda local solo está disponible en este piloto');const d=localDB();return d.companies.map(co=>({id:co.id,code:co.code,name:co.name,users:d.users.filter(u=>u.companyId===co.id).map(u=>({id:u.id,role:u.role,name:u.name,job:u.job,legajo:u.legajo||'',loginCode:u.loginCode||''}))}))},
- async resetAdminPin(companyId,userId,newPin){if(cloudAvailable)throw new Error('El restablecimiento local no está disponible en nube');if(!/^\d{4,8}$/.test(newPin))throw new Error('El PIN debe tener entre 4 y 8 dígitos');const d=localDB();const u=d.users.find(x=>x.id===userId&&x.companyId===companyId&&x.role==='admin');if(!u)throw new Error('Administrador no encontrado');u.pin=newPin;saveLocal(d);return true}
+ async createCompany(data){const d=localDB(),code=data.code.trim().toUpperCase();if(!code)throw new Error('Código de empresa obligatorio');if(d.companies.some(c=>c.code.toUpperCase()===code))throw new Error('Ese código de empresa ya existe');const cid='c'+Date.now();const company={id:cid,code,name:data.name.trim()};const admin={id:'u'+Date.now(),companyId:cid,role:'admin',name:data.adminName.trim(),job:'Administrador',legajo:data.adminLogin.trim(),site:'General',loginCode:data.adminLogin.trim(),pin:data.pin};d.companies.push(company);d.users.push(admin);saveLocal(d);return {user:admin,company,cloud:false}}
 };
 
-async function show(id){$$('.view').forEach(v=>v.classList.remove('active'));$('#'+id).classList.add('active');if(id==='workerHomeView'&&state.session?.user?.role==='worker')await renderWorkerHomeMetrics();if(id==='historyView')await renderHistory();if(id==='workerProfileView')renderWorkerProfile();if(id==='hsHomeView')await renderHS();if(id==='adminHomeView')await renderAdmin();if(id==='accessHelpView')await renderAccessHelp();scrollTo(0,0)}
+async function show(id){$$('.view').forEach(v=>v.classList.remove('active'));$('#'+id).classList.add('active');if(id==='workerHomeView'&&state.session?.user?.role==='worker')await renderWorkerHomeMetrics();if(id==='historyView')await renderHistory();if(id==='workerProfileView')renderWorkerProfile();if(id==='hsHomeView')await renderHS();if(id==='adminHomeView')await renderAdmin();scrollTo(0,0)}
 $$('[data-go]').forEach(b=>b.onclick=()=>show(b.dataset.go));
 
 $('#loginBtn').onclick=async()=>{const companyCode=$('#loginCompanyCode').value.trim(),loginCode=$('#loginCode').value.trim(),pin=$('#loginPin').value;if(!companyCode||!loginCode||!pin)return toast('Completá empresa, usuario y PIN');try{const s=await backend.login(companyCode,loginCode,pin);setSession(s);await routeSession()}catch(e){toast(e.message)}};
-$('#accessHelpBtn').onclick=()=>show('accessHelpView');
-
-function roleLabel(role){return role==='admin'?'Administrador':role==='hs'?'Higiene y Seguridad':'Trabajador'}
-
-async function renderAccessHelp(){
-  try{
-    const companies=await backend.accessDirectory();
-    const box=$('#accessDirectory');
-    if(!companies.length){
-      box.innerHTML='<p class="muted">Todavía no hay empresas piloto guardadas en este dispositivo.</p>';
-      $('#resetCompanySelect').innerHTML='';
-      $('#resetAdminSelect').innerHTML='';
-      return;
-    }
-    box.innerHTML=companies.map(co=>`
-      <div class="record" style="margin-bottom:12px">
-        <strong>${escapeHtml(co.name)}</strong><br>
-        <small>Código de empresa: <strong>${escapeHtml(co.code)}</strong></small>
-        <div style="margin-top:10px">
-          ${co.users.map(u=>`
-            <div style="padding:10px 0;border-top:1px solid rgba(255,255,255,.12)">
-              <strong>${escapeHtml(u.name)}</strong><br>
-              <small>${escapeHtml(roleLabel(u.role))} · usuario: ${escapeHtml(u.loginCode||'—')} · legajo: ${escapeHtml(u.legajo||'—')}</small><br>
-              <button class="ghost use-access-btn" type="button" data-company="${escapeHtml(co.code)}" data-user="${escapeHtml(u.loginCode||u.legajo||u.name)}" style="margin-top:8px">Usar estos datos</button>
-            </div>`).join('')}
-        </div>
-      </div>`).join('');
-    $$('.use-access-btn').forEach(btn=>btn.onclick=()=>{
-      $('#loginCompanyCode').value=btn.dataset.company;
-      $('#loginCode').value=btn.dataset.user;
-      $('#loginPin').value='';
-      show('loginView');
-      setTimeout(()=>$('#loginPin').focus(),50);
-    });
-    $('#resetCompanySelect').innerHTML=companies.map(co=>`<option value="${escapeHtml(co.id)}">${escapeHtml(co.name)} (${escapeHtml(co.code)})</option>`).join('');
-    window.__accessCompanies=companies;
-    updateResetAdmins();
-  }catch(e){toast(e.message)}
-}
-
-function updateResetAdmins(){
-  const companies=window.__accessCompanies||[];
-  const cid=$('#resetCompanySelect').value;
-  const co=companies.find(c=>c.id===cid);
-  const admins=(co?.users||[]).filter(u=>u.role==='admin');
-  $('#resetAdminSelect').innerHTML=admins.map(u=>`<option value="${escapeHtml(u.id)}">${escapeHtml(u.name)} · ${escapeHtml(u.loginCode||u.legajo||'')}</option>`).join('');
-}
-$('#resetCompanySelect').onchange=updateResetAdmins;
-$('#resetAdminPinBtn').onclick=async()=>{
-  const companyId=$('#resetCompanySelect').value,userId=$('#resetAdminSelect').value,pin=$('#resetAdminPin').value;
-  if(!companyId||!userId)return toast('Seleccioná empresa y administrador');
-  try{
-    await backend.resetAdminPin(companyId,userId,pin);
-    $('#resetAdminPin').value='';
-    toast('PIN del administrador actualizado');
-  }catch(e){toast(e.message)}
-};
-
 $$('.logout').forEach(b=>b.onclick=async()=>{await backend.logout();setSession(null);show('loginView')});
 async function routeSession(){const s=state.session;if(!s?.user)return show('loginView');const u=s.user,c=s.company;if(u.role==='worker'){ $('#workerWelcome').textContent=u.name;$('#workerMeta').textContent=`${u.job} · ${c.name} · ${u.site||'Sin sector habitual'}`;$('#taskSite').value=u.site||'';updateSyncNotice();await show('workerHomeView')}else if(u.role==='hs'){ $('#hsWelcome').textContent=u.name;$('#hsCompany').textContent=c.name;await show('hsHomeView')}else{ $('#adminWelcome').textContent=u.name;$('#adminCompany').textContent=c.name;await show('adminHomeView')}}
 
